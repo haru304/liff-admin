@@ -333,7 +333,6 @@
     }
   }
 
-  // 使われている時間範囲を特定
   let minTime = '23:30';
   let maxTime = '00:00';
   for (const section of sectionList) {
@@ -350,47 +349,41 @@
 
   const slots = allTimes.filter(t => t >= minTime && t < maxTime);
 
-  // テーブルヘッダー
   let html = '<tr><th style="min-width:80px; position:sticky; left:0; z-index:1; background:#333;">セクション</th>';
   for (const t of slots) {
     html += `<th style="min-width:50px; font-size:10px;">${t}</th>`;
   }
   html += '</tr>';
 
-  // 各セクションの行
   for (const section of sectionList) {
     html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1;">${section}</td>`;
-    
+
     let skipCount = 0;
     for (let si = 0; si < slots.length; si++) {
       if (skipCount > 0) { skipCount--; continue; }
-      
+
       const slot = slots[si];
       const slotEndIdx = allTimes.indexOf(slot) + 1;
       const slotEnd = allTimes[slotEndIdx];
-      
-      // このスロットに該当する枠を探す
       const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
-      
+
       if (matching && matching.startTime === slot) {
-        // ★修正: endTimeのインデックスを正確に計算
         const startIdx = slots.indexOf(matching.startTime);
         let endIdx = slots.indexOf(matching.endTime);
-        
-        // endTimeがslotsに含まれない場合（例: 23:30が最後）はslots.lengthを使う
         if (endIdx < 0) endIdx = slots.length;
-        
         const span = endIdx - startIdx;
         skipCount = span - 1;
 
         // ★人数分のバーを生成
         const num = parseInt(matching.requiredNum);
-        const bars = Array(num).fill(
+        const colors = ['#06C755', '#05a847', '#048a3b', '#037a34', '#026a2d'];
+        const bars = Array(num).fill(0).map((_, i) =>
           `<div style="
-            background:#06C755;
-            height:14px;
+            background:${colors[i % colors.length]};
+            height:12px;
             border-radius:3px;
-            margin:1px 0;
+            margin:2px 0;
+            width:100%;
           "></div>`
         ).join('');
 
@@ -553,4 +546,5 @@
 </script>
 </body>
 </html>
+
 
