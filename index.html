@@ -34,14 +34,11 @@
     .tab-btn { flex: 1; padding: 10px; border-radius: 5px; border: 2px solid #06C755; font-size: 15px; cursor: pointer; }
     .tab-btn.active { background: #06C755; color: white; }
     .tab-btn.inactive { background: white; color: #06C755; }
-
-    /* シフト表プレビュー */
     .preview-container { margin-top: 20px; overflow-x: auto; }
-    .preview-table { border-collapse: collapse; width: 100%; min-width: 500px; font-size: 12px; }
-    .preview-table th { background: #06C755; color: white; padding: 8px; text-align: center; border: 1px solid #ddd; }
-    .preview-table td { padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; }
-    .preview-table .section-cell { background: #f0f0f0; font-weight: bold; text-align: left; padding-left: 10px; }
-    .shift-bar { background: #06C755; color: white; border-radius: 5px; padding: 3px 5px; font-size: 11px; white-space: nowrap; }
+    .preview-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .preview-table th { background: #333; color: white; padding: 6px 4px; text-align: center; border: 1px solid #555; font-size: 11px; min-width: 45px; }
+    .preview-table td { padding: 5px; border: 1px solid #ddd; text-align: center; vertical-align: middle; height: 35px; }
+    .preview-table .section-cell { background: #f0f0f0; font-weight: bold; text-align: left; padding-left: 10px; min-width: 80px; }
     .empty-cell { background: #fafafa; }
   </style>
 </head>
@@ -174,7 +171,6 @@
   <button class="save-btn" id="shiftSaveBtn" onclick="saveShiftTemplate()">保存する</button>
   <div class="status" id="shiftStatus"></div>
 
-  <!-- プレビュー -->
   <div id="previewArea" style="display:none; margin-top:20px;">
     <h4 style="margin-bottom:10px;">📊 シフト表プレビュー（<span id="previewDayType"></span>）</h4>
     <div class="preview-container">
@@ -265,7 +261,6 @@
   function renderShiftSections() {
     const container = document.getElementById('shiftSections');
     const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
-
     container.innerHTML = sectionList.map(section => {
       const frames = shiftTemplateData[currentDayType][section] || [];
       return `
@@ -326,80 +321,76 @@
     shiftTemplateData[currentDayType][section][idx][key] = value;
   }
 
-  // プレビュー表示
   function showPreview() {
-  const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
-  const frames = shiftTemplateData[currentDayType];
+    const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+    const frames = shiftTemplateData[currentDayType];
 
-  // 全時間を30分刻みで生成
-  const allTimes = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m of [0, 30]) {
-      allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-    }
-  }
-
-  // 使われている時間範囲を特定
-  let minTime = '23:30';
-  let maxTime = '00:00';
-  for (const section of sectionList) {
-    for (const f of (frames[section] || [])) {
-      if (f.startTime < minTime) minTime = f.startTime;
-      if (f.endTime > maxTime) maxTime = f.endTime;
-    }
-  }
-
-  if (minTime === '23:30' && maxTime === '00:00') {
-    alert('枠が設定されていません');
-    return;
-  }
-
-  // 表示する時間スロットを絞る
-  const slots = allTimes.filter(t => t >= minTime && t < maxTime);
-
-  // テーブル生成
-  let html = '<tr><th style="min-width:80px">セクション</th>';
-  for (const t of slots) {
-    html += `<th style="min-width:45px; font-size:11px;">${t}</th>`;
-  }
-  html += '</tr>';
-
-  for (const section of sectionList) {
-    html += `<tr><td class="section-cell">${section}</td>`;
-    for (const slot of slots) {
-      const slotEnd = allTimes[allTimes.indexOf(slot) + 1];
-      const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
-      if (matching) {
-        // 枠の開始点かどうか確認
-        const isStart = matching.startTime === slot;
-        if (isStart) {
-          // 何スロット分か計算
-          const startIdx = slots.indexOf(matching.startTime);
-          const endIdx = slots.indexOf(matching.endTime);
-          const span = endIdx - startIdx;
-          html += `<td colspan="${span}" style="background:#06C755; color:white; text-align:center; border-radius:5px; padding:5px; font-size:12px; font-weight:bold;">${matching.requiredNum}人</td>`;
-        }
-        // isStartでない場合はcolspanで既に埋まっているのでスキップ
-      } else {
-        html += `<td class="empty-cell"></td>`;
+    // 全時間を30分刻みで生成
+    const allTimes = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) {
+        allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
       }
     }
+
+    // 使われている時間範囲を特定
+    let minTime = '23:30';
+    let maxTime = '00:00';
+    for (const section of sectionList) {
+      for (const f of (frames[section] || [])) {
+        if (f.startTime < minTime) minTime = f.startTime;
+        if (f.endTime > maxTime) maxTime = f.endTime;
+      }
+    }
+
+    if (minTime === '23:30' && maxTime === '00:00') {
+      alert('枠が設定されていません');
+      return;
+    }
+
+    // 表示する時間スロットを絞る
+    const slots = allTimes.filter(t => t >= minTime && t < maxTime);
+
+    // テーブル生成
+    let html = '<tr><th style="min-width:80px; position:sticky; left:0; z-index:1;">セクション</th>';
+    for (const t of slots) {
+      html += `<th style="min-width:50px; font-size:10px;">${t}</th>`;
+    }
     html += '</tr>';
+
+    for (const section of sectionList) {
+      html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1;">${section}</td>`;
+      let skipCount = 0;
+      for (let si = 0; si < slots.length; si++) {
+        if (skipCount > 0) { skipCount--; continue; }
+        const slot = slots[si];
+        const slotEnd = allTimes[allTimes.indexOf(slot) + 1];
+        const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
+        if (matching && matching.startTime === slot) {
+          const startIdx = slots.indexOf(matching.startTime);
+          const endIdx = slots.indexOf(matching.endTime);
+          const span = endIdx < 0 ? slots.length - startIdx : endIdx - startIdx;
+          skipCount = span - 1;
+          html += `<td colspan="${span}" style="background:#06C755; color:white; text-align:center; border-radius:3px; padding:5px; font-size:12px; font-weight:bold; border:1px solid #05a847;">${matching.requiredNum}人</td>`;
+        } else if (matching) {
+          // すでにcolspanで処理済み
+        } else {
+          html += `<td class="empty-cell"></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+
+    document.getElementById('previewTable').innerHTML = html;
+    document.getElementById('previewDayType').innerText = currentDayType;
+    document.getElementById('previewArea').style.display = 'block';
+    document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
   }
-
-  document.getElementById('previewTable').innerHTML = html;
-  document.getElementById('previewDayType').innerText = currentDayType;
-  document.getElementById('previewArea').style.display = 'block';
-
-  // プレビューまでスクロール
-  document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
-}
 
   async function saveShiftTemplate() {
     const btn = document.getElementById('shiftSaveBtn');
     const status = document.getElementById('shiftStatus');
     btn.disabled = true;
-
     const entries = [];
     for (const dayType of ['平日', '休日']) {
       const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
@@ -409,22 +400,14 @@
         }
       }
     }
-
     try {
       const result = await callGAS({ action: 'saveShiftTemplate', storeId, entries });
-      if (result.success) {
-        status.className = 'status success';
-        status.innerText = '✅ 保存しました！';
-      } else {
-        status.className = 'status error';
-        status.innerText = '❌ ' + result.msg;
-      }
+      status.className = result.success ? 'status success' : 'status error';
+      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
     } catch (err) {
       status.className = 'status error';
       status.innerText = '❌ エラー: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
+    } finally { btn.disabled = false; }
   }
 
   async function loadShiftTemplate() {
@@ -536,4 +519,3 @@
 </script>
 </body>
 </html>
-
