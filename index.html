@@ -321,71 +321,105 @@
     shiftTemplateData[currentDayType][section][idx][key] = value;
   }
 
+  
   function showPreview() {
-    const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
-    const frames = shiftTemplateData[currentDayType];
+  const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+  const frames = shiftTemplateData[currentDayType];
 
-    // 全時間を30分刻みで生成
-    const allTimes = [];
-    for (let h = 0; h < 24; h++) {
-      for (let m of [0, 30]) {
-        allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  const allTimes = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m of [0, 30]) {
+      allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    }
+  }
+
+  // 使われている時間範囲を特定
+  let minTime = '23:30';
+  let maxTime = '00:00';
+  for (const section of sectionList) {
+    for (const f of (frames[section] || [])) {
+      if (f.startTime < minTime) minTime = f.startTime;
+      if (f.endTime > maxTime) maxTime = f.endTime;
+    }
+  }
+
+  if (minTime === '23:30' && maxTime === '00:00') {
+    alert('枠が設定されていません');
+    return;
+  }
+
+  const slots = allTimes.filter(t => t >= minTime && t < maxTime);
+
+  // テーブルヘッダー
+  let html = '<tr><th style="min-width:80px; position:sticky; left:0; z-index:1; background:#333;">セクション</th>';
+  for (const t of slots) {
+    html += `<th style="min-width:50px; font-size:10px;">${t}</th>`;
+  }
+  html += '</tr>';
+
+  // 各セクションの行
+  for (const section of sectionList) {
+    html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1;">${section}</td>`;
+    
+    let skipCount = 0;
+    for (let si = 0; si < slots.length; si++) {
+      if (skipCount > 0) { skipCount--; continue; }
+      
+      const slot = slots[si];
+      const slotEndIdx = allTimes.indexOf(slot) + 1;
+      const slotEnd = allTimes[slotEndIdx];
+      
+      // このスロットに該当する枠を探す
+      const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
+      
+      if (matching && matching.startTime === slot) {
+        // ★修正: endTimeのインデックスを正確に計算
+        const startIdx = slots.indexOf(matching.startTime);
+        let endIdx = slots.indexOf(matching.endTime);
+        
+        // endTimeがslotsに含まれない場合（例: 23:30が最後）はslots.lengthを使う
+        if (endIdx < 0) endIdx = slots.length;
+        
+        const span = endIdx - startIdx;
+        skipCount = span - 1;
+
+        // ★人数分のバーを生成
+        const num = parseInt(matching.requiredNum);
+        const bars = Array(num).fill(
+          `<div style="
+            background:#06C755;
+            height:14px;
+            border-radius:3px;
+            margin:1px 0;
+          "></div>`
+        ).join('');
+
+        html += `
+          <td colspan="${span}" style="
+            padding:4px 6px;
+            border:1px solid #ddd;
+            vertical-align:middle;
+          ">
+            <div style="font-size:10px; color:#333; text-align:center; margin-bottom:2px; font-weight:bold;">
+              ${matching.startTime}〜${matching.endTime}
+            </div>
+            ${bars}
+            <div style="font-size:10px; color:#06C755; text-align:center; margin-top:2px; font-weight:bold;">
+              ${num}人
+            </div>
+          </td>`;
+      } else if (!matching) {
+        html += `<td class="empty-cell"></td>`;
       }
-    }
-
-    // 使われている時間範囲を特定
-    let minTime = '23:30';
-    let maxTime = '00:00';
-    for (const section of sectionList) {
-      for (const f of (frames[section] || [])) {
-        if (f.startTime < minTime) minTime = f.startTime;
-        if (f.endTime > maxTime) maxTime = f.endTime;
-      }
-    }
-
-    if (minTime === '23:30' && maxTime === '00:00') {
-      alert('枠が設定されていません');
-      return;
-    }
-
-    // 表示する時間スロットを絞る
-    const slots = allTimes.filter(t => t >= minTime && t < maxTime);
-
-    // テーブル生成
-    let html = '<tr><th style="min-width:80px; position:sticky; left:0; z-index:1;">セクション</th>';
-    for (const t of slots) {
-      html += `<th style="min-width:50px; font-size:10px;">${t}</th>`;
     }
     html += '</tr>';
-
-    for (const section of sectionList) {
-      html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1;">${section}</td>`;
-      let skipCount = 0;
-      for (let si = 0; si < slots.length; si++) {
-        if (skipCount > 0) { skipCount--; continue; }
-        const slot = slots[si];
-        const slotEnd = allTimes[allTimes.indexOf(slot) + 1];
-        const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
-        if (matching && matching.startTime === slot) {
-          const startIdx = slots.indexOf(matching.startTime);
-          const endIdx = slots.indexOf(matching.endTime);
-          const span = endIdx < 0 ? slots.length - startIdx : endIdx - startIdx;
-          skipCount = span - 1;
-          html += `<td colspan="${span}" style="background:#06C755; color:white; text-align:center; border-radius:3px; padding:5px; font-size:12px; font-weight:bold; border:1px solid #05a847;">${matching.requiredNum}人</td>`;
-        } else if (matching) {
-          // すでにcolspanで処理済み
-        } else {
-          html += `<td class="empty-cell"></td>`;
-        }
-      }
-      html += '</tr>';
-    }
-
-    document.getElementById('previewTable').innerHTML = html;
-    document.getElementById('previewDayType').innerText = currentDayType;
-    document.getElementById('previewArea').style.display = 'block';
-    document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
   }
+
+  document.getElementById('previewTable').innerHTML = html;
+  document.getElementById('previewDayType').innerText = currentDayType;
+  document.getElementById('previewArea').style.display = 'block';
+  document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
+}
 
   async function saveShiftTemplate() {
     const btn = document.getElementById('shiftSaveBtn');
@@ -519,3 +553,4 @@
 </script>
 </body>
 </html>
+
