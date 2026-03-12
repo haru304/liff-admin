@@ -24,12 +24,25 @@
     .tag-add { display: flex; gap: 5px; margin-top: 5px; }
     .tag-add input { flex: 1; }
     .tag-add button { background: #06C755; color: white; border: none; border-radius: 5px; padding: 10px 15px; cursor: pointer; }
-    .save-btn { width: 100%; padding: 15px; background: #06C755; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
-    .save-btn:disabled { background: #aaa; }
+    .save-btn { width: 100%; padding: 15px; background: #06C755; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    .preview-btn { width: 100%; padding: 15px; background: #007AFF; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    .save-btn:disabled, .preview-btn:disabled { background: #aaa; }
     .status { margin-top: 10px; padding: 10px; border-radius: 5px; text-align: center; display: none; }
     .status.success { background: #e0ffe0; color: green; display: block; }
     .status.error { background: #ffe0e0; color: red; display: block; }
     #initStatus { padding: 20px; text-align: center; color: #888; }
+    .tab-btn { flex: 1; padding: 10px; border-radius: 5px; border: 2px solid #06C755; font-size: 15px; cursor: pointer; }
+    .tab-btn.active { background: #06C755; color: white; }
+    .tab-btn.inactive { background: white; color: #06C755; }
+
+    /* シフト表プレビュー */
+    .preview-container { margin-top: 20px; overflow-x: auto; }
+    .preview-table { border-collapse: collapse; width: 100%; min-width: 500px; font-size: 12px; }
+    .preview-table th { background: #06C755; color: white; padding: 8px; text-align: center; border: 1px solid #ddd; }
+    .preview-table td { padding: 8px; border: 1px solid #ddd; text-align: center; vertical-align: middle; }
+    .preview-table .section-cell { background: #f0f0f0; font-weight: bold; text-align: left; padding-left: 10px; }
+    .shift-bar { background: #06C755; color: white; border-radius: 5px; padding: 3px 5px; font-size: 11px; white-space: nowrap; }
+    .empty-cell { background: #fafafa; }
   </style>
 </head>
 <body>
@@ -58,7 +71,7 @@
       <span class="icon">📅</span>
       <div>
         <div class="title">シフト枠設定</div>
-        <div class="desc">時間枠・必要人数を設定</div>
+        <div class="desc">時間枠・必要人数を設定・プレビュー確認</div>
       </div>
     </button>
     <button class="menu-btn" onclick="showScreen('staffScreen')">
@@ -145,14 +158,32 @@
   <div class="status" id="settingsStatus"></div>
 </div>
 
-<!-- シフト枠設定（後で実装） -->
+<!-- シフト枠設定 -->
 <div id="shiftScreen" class="screen">
   <button class="back-btn" onclick="showScreen('menuScreen')">← 戻る</button>
-  <h3>📅 シフト枠設定</h3>
-  <p style="margin-top:20px; color:#888">近日実装予定</p>
+  <h3 style="margin-bottom:15px">📅 シフト枠設定</h3>
+
+  <div style="display:flex; gap:10px; margin-bottom:15px;">
+    <button id="weekdayTab" class="tab-btn active" onclick="switchDayType('平日')">平日</button>
+    <button id="holidayTab" class="tab-btn inactive" onclick="switchDayType('休日')">休日</button>
+  </div>
+
+  <div id="shiftSections"></div>
+
+  <button class="preview-btn" onclick="showPreview()">👁️ プレビューを確認</button>
+  <button class="save-btn" id="shiftSaveBtn" onclick="saveShiftTemplate()">保存する</button>
+  <div class="status" id="shiftStatus"></div>
+
+  <!-- プレビュー -->
+  <div id="previewArea" style="display:none; margin-top:20px;">
+    <h4 style="margin-bottom:10px;">📊 シフト表プレビュー（<span id="previewDayType"></span>）</h4>
+    <div class="preview-container">
+      <table class="preview-table" id="previewTable"></table>
+    </div>
+  </div>
 </div>
 
-<!-- スタッフ管理（後で実装） -->
+<!-- スタッフ管理 -->
 <div id="staffScreen" class="screen">
   <button class="back-btn" onclick="showScreen('menuScreen')">← 戻る</button>
   <h3>👥 スタッフ管理</h3>
@@ -165,8 +196,9 @@
   let userProfile = null;
   let storeId = null;
   let sections = [];
+  let currentDayType = '平日';
+  let shiftTemplateData = { '平日': {}, '休日': {} };
 
-  // 時間の選択肢を生成（30分刻み）
   function generateTimeOptions(selectId) {
     const select = document.getElementById(selectId);
     for (let h = 0; h < 24; h++) {
@@ -180,7 +212,6 @@
     }
   }
 
-  // 日付の選択肢を生成
   function generateDayOptions(selectId) {
     const select = document.getElementById(selectId);
     for (let d = 1; d <= 31; d++) {
@@ -191,12 +222,21 @@
     }
   }
 
-  // セクション追加
+  function generateTimeOptionsHTML(selected) {
+    let html = '';
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) {
+        const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        html += `<option value="${time}" ${time === selected ? 'selected' : ''}>${time}</option>`;
+      }
+    }
+    return html;
+  }
+
   function addSection() {
     const input = document.getElementById('sectionInput');
     const val = input.value.trim();
-    if (!val) return;
-    if (sections.includes(val)) { input.value = ''; return; }
+    if (!val || sections.includes(val)) { input.value = ''; return; }
     sections.push(val);
     renderSections();
     input.value = '';
@@ -214,124 +254,261 @@
     ).join('');
   }
 
-  // 画面切替
-  function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+  function switchDayType(dayType) {
+    currentDayType = dayType;
+    document.getElementById('weekdayTab').className = 'tab-btn ' + (dayType === '平日' ? 'active' : 'inactive');
+    document.getElementById('holidayTab').className = 'tab-btn ' + (dayType === '休日' ? 'active' : 'inactive');
+    document.getElementById('previewArea').style.display = 'none';
+    renderShiftSections();
   }
 
-  // GAS呼び出し
+  function renderShiftSections() {
+    const container = document.getElementById('shiftSections');
+    const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+
+    container.innerHTML = sectionList.map(section => {
+      const frames = shiftTemplateData[currentDayType][section] || [];
+      return `
+        <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+          <div style="font-weight:bold; margin-bottom:10px; color:#333;">📌 ${section}</div>
+          <div id="frames_${currentDayType}_${section}">
+            ${frames.map((f, idx) => renderFrame(section, idx, f)).join('')}
+          </div>
+          <button onclick="addFrame('${section}')"
+            style="width:100%; padding:8px; border:2px dashed #06C755; background:none; color:#06C755; border-radius:5px; cursor:pointer; margin-top:5px;">
+            ＋ 枠を追加
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderFrame(section, idx, frame) {
+    const startVal = frame ? frame.startTime : '10:00';
+    const endVal = frame ? frame.endTime : '18:00';
+    const numVal = frame ? frame.requiredNum : 1;
+    return `
+      <div style="display:flex; align-items:center; gap:5px; margin-bottom:8px; flex-wrap:wrap;">
+        <select onchange="updateFrame('${section}', ${idx}, 'startTime', this.value)"
+          style="flex:1; padding:8px; border:1px solid #ddd; border-radius:5px; font-size:14px;">
+          ${generateTimeOptionsHTML(startVal)}
+        </select>
+        <span>〜</span>
+        <select onchange="updateFrame('${section}', ${idx}, 'endTime', this.value)"
+          style="flex:1; padding:8px; border:1px solid #ddd; border-radius:5px; font-size:14px;">
+          ${generateTimeOptionsHTML(endVal)}
+        </select>
+        <input type="number" min="1" max="20" value="${numVal}"
+          onchange="updateFrame('${section}', ${idx}, 'requiredNum', this.value)"
+          style="width:55px; padding:8px; border:1px solid #ddd; border-radius:5px; text-align:center;">
+        <span style="color:#888; font-size:12px;">人</span>
+        <button onclick="removeFrame('${section}', ${idx})"
+          style="background:#ff4444; color:white; border:none; border-radius:5px; padding:8px 10px; cursor:pointer;">
+          🗑️
+        </button>
+      </div>
+    `;
+  }
+
+  function addFrame(section) {
+    if (!shiftTemplateData[currentDayType][section]) shiftTemplateData[currentDayType][section] = [];
+    shiftTemplateData[currentDayType][section].push({ startTime: '10:00', endTime: '18:00', requiredNum: 1 });
+    renderShiftSections();
+  }
+
+  function removeFrame(section, idx) {
+    shiftTemplateData[currentDayType][section].splice(idx, 1);
+    renderShiftSections();
+  }
+
+  function updateFrame(section, idx, key, value) {
+    if (!shiftTemplateData[currentDayType][section]) return;
+    shiftTemplateData[currentDayType][section][idx][key] = value;
+  }
+
+  // プレビュー表示
+  function showPreview() {
+    const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+    const frames = shiftTemplateData[currentDayType];
+
+    // 全時間を収集してソート
+    const timeSet = new Set();
+    for (const section of sectionList) {
+      for (const f of (frames[section] || [])) {
+        timeSet.add(f.startTime);
+        timeSet.add(f.endTime);
+      }
+    }
+    const times = Array.from(timeSet).sort();
+
+    if (times.length === 0) {
+      alert('枠が設定されていません');
+      return;
+    }
+
+    // テーブル生成
+    let html = '<tr><th>セクション</th>';
+    for (let i = 0; i < times.length - 1; i++) {
+      html += `<th>${times[i]}<br>〜<br>${times[i+1]}</th>`;
+    }
+    html += '</tr>';
+
+    for (const section of sectionList) {
+      html += `<tr><td class="section-cell">${section}</td>`;
+      for (let i = 0; i < times.length - 1; i++) {
+        const slotStart = times[i];
+        const slotEnd = times[i + 1];
+        const matching = (frames[section] || []).find(f => f.startTime <= slotStart && f.endTime >= slotEnd);
+        if (matching) {
+          html += `<td><span class="shift-bar">${matching.requiredNum}人</span></td>`;
+        } else {
+          html += `<td class="empty-cell"></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+
+    document.getElementById('previewTable').innerHTML = html;
+    document.getElementById('previewDayType').innerText = currentDayType;
+    document.getElementById('previewArea').style.display = 'block';
+  }
+
+  async function saveShiftTemplate() {
+    const btn = document.getElementById('shiftSaveBtn');
+    const status = document.getElementById('shiftStatus');
+    btn.disabled = true;
+
+    const entries = [];
+    for (const dayType of ['平日', '休日']) {
+      const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+      for (const section of sectionList) {
+        for (const frame of (shiftTemplateData[dayType][section] || [])) {
+          entries.push({ dayType, section, startTime: frame.startTime, endTime: frame.endTime, requiredNum: frame.requiredNum });
+        }
+      }
+    }
+
+    try {
+      const result = await callGAS({ action: 'saveShiftTemplate', storeId, entries });
+      if (result.success) {
+        status.className = 'status success';
+        status.innerText = '✅ 保存しました！';
+      } else {
+        status.className = 'status error';
+        status.innerText = '❌ ' + result.msg;
+      }
+    } catch (err) {
+      status.className = 'status error';
+      status.innerText = '❌ エラー: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function loadShiftTemplate() {
+    try {
+      const result = await callGAS({ action: 'getShiftTemplate', storeId });
+      if (result.success) {
+        shiftTemplateData = { '平日': {}, '休日': {} };
+        for (const entry of result.data) {
+          if (!shiftTemplateData[entry.dayType][entry.section]) shiftTemplateData[entry.dayType][entry.section] = [];
+          shiftTemplateData[entry.dayType][entry.section].push({
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            requiredNum: entry.requiredNum
+          });
+        }
+      }
+    } catch (err) { console.error(err); }
+  }
+
+  async function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if (id === 'shiftScreen') {
+      await loadShiftTemplate();
+      renderShiftSections();
+    }
+  }
+
   async function callGAS(params) {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify(params)
-    });
+    const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(params) });
     return await res.json();
   }
 
-  // 店舗情報保存
   async function saveStore() {
     const btn = document.getElementById('storeSaveBtn');
     const status = document.getElementById('storeStatus');
     btn.disabled = true;
-
     try {
       const result = await callGAS({
-        action: 'saveStore',
-        storeId: storeId,
+        action: 'saveStore', storeId,
         storeName: document.getElementById('storeName').value.trim(),
         openTime: document.getElementById('openTime').value,
         closeTime: document.getElementById('closeTime').value,
         holiday: document.getElementById('holiday').value,
         sections: sections.join(',')
       });
-
-      if (result.success) {
-        status.className = 'status success';
-        status.innerText = '✅ 保存しました！';
-      } else {
-        status.className = 'status error';
-        status.innerText = '❌ ' + result.msg;
-      }
+      status.className = result.success ? 'status success' : 'status error';
+      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
     } catch (err) {
       status.className = 'status error';
       status.innerText = '❌ エラー: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
+    } finally { btn.disabled = false; }
   }
 
-  // シフト設定保存
   async function saveSettings() {
     const btn = document.getElementById('settingsSaveBtn');
     const status = document.getElementById('settingsStatus');
     btn.disabled = true;
-
     try {
       const result = await callGAS({
-        action: 'saveSettings',
-        storeId: storeId,
+        action: 'saveSettings', storeId,
         cycle: document.getElementById('cycle').value,
         deadline: document.getElementById('deadline').value,
         submitDeadline: document.getElementById('submitDeadline').value,
         notifyTiming: document.getElementById('notifyTiming').value
       });
-
-      if (result.success) {
-        status.className = 'status success';
-        status.innerText = '✅ 保存しました！';
-      } else {
-        status.className = 'status error';
-        status.innerText = '❌ ' + result.msg;
-      }
+      status.className = result.success ? 'status success' : 'status error';
+      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
     } catch (err) {
       status.className = 'status error';
       status.innerText = '❌ エラー: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
+    } finally { btn.disabled = false; }
   }
 
-  // 初期化
   window.onload = async function() {
     generateTimeOptions('openTime');
     generateTimeOptions('closeTime');
     generateDayOptions('deadline');
     generateDayOptions('submitDeadline');
 
+    const status = document.getElementById('initStatus');
     try {
       await liff.init({ liffId: MY_LIFF_ID });
       if (!liff.isLoggedIn()) { liff.login(); return; }
-
       userProfile = await liff.getProfile();
 
-      // 権限チェック
-      const result = await callGAS({
-        action: 'checkAdmin',
-        uid: userProfile.userId
-      });
-
+      const result = await callGAS({ action: 'checkAdmin', uid: userProfile.userId });
       if (!result.success) {
-        document.getElementById('initStatus').innerText = '❌ 管理者権限がありません';
+        status.innerText = '❌ 管理者権限がありません';
         return;
       }
 
       storeId = result.storeId;
-      document.getElementById('initStatus').style.display = 'none';
+      status.style.display = 'none';
       showScreen('menuScreen');
 
-      // 既存データ読み込み
       if (result.storeData) {
         document.getElementById('storeName').value = result.storeData.name || '';
         document.getElementById('openTime').value = result.storeData.openTime || '';
         document.getElementById('closeTime').value = result.storeData.closeTime || '';
         document.getElementById('holiday').value = result.storeData.holiday || '';
-        sections = result.storeData.sections ? result.storeData.sections.split(',') : [];
+        sections = result.storeData.sections ? result.storeData.sections.split(',').filter(s => s) : [];
         renderSections();
       }
-
     } catch (err) {
-      document.getElementById('initStatus').innerText = '❌ エラー: ' + err.message;
+      status.innerText = '❌ エラー: ' + err.message;
     }
   };
 </script>
