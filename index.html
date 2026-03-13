@@ -738,15 +738,24 @@
     } finally { btn.disabled = false; }
   }
 
-  async function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    if (id === 'shiftScreen') {
-      await loadShiftTemplate();
-      renderDayTypeTabs();
-      renderShiftSections();
-    }
+async function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+
+  if (id === 'shiftScreen') {
+    // ローディング表示・コンテンツ非表示
+    document.getElementById('templateLoading').style.display = 'block';
+    document.getElementById('templateContent').style.display = 'none';
+
+    await loadShiftTemplate();
+    renderDayTypeTabs();
+    renderShiftSections();
+
+    // 読み込み完了後に表示
+    document.getElementById('templateLoading').style.display = 'none';
+    document.getElementById('templateContent').style.display = 'block';
   }
+}
 
   window.onload = async function() {
     generateTimeOptions('openTime');
@@ -782,4 +791,5 @@
 </script>
 </body>
 </html>
+
 
