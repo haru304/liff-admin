@@ -31,20 +31,14 @@
     .status.success { background: #e0ffe0; color: green; display: block; }
     .status.error { background: #ffe0e0; color: red; display: block; }
     #initStatus { padding: 20px; text-align: center; color: #888; }
-
-    /* タブ */
     .tab-bar { display: flex; gap: 5px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
     .tab-btn { padding: 8px 14px; border-radius: 20px; border: 2px solid #06C755; font-size: 14px; cursor: pointer; white-space: nowrap; }
     .tab-btn.active { background: #06C755; color: white; }
     .tab-btn.inactive { background: white; color: #06C755; }
-
-    /* メインタブ（テンプレート/カレンダー） */
     .main-tab-bar { display: flex; gap: 10px; margin-bottom: 20px; }
     .main-tab-btn { flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #06C755; font-size: 15px; font-weight: bold; cursor: pointer; text-align: center; }
     .main-tab-btn.active { background: #06C755; color: white; }
     .main-tab-btn.inactive { background: white; color: #06C755; }
-
-    /* カレンダー */
     .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
     .cal-nav { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 8px 15px; cursor: pointer; font-size: 16px; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
@@ -59,17 +53,12 @@
     .cal-day .day-num.sun { color: #e00; }
     .cal-day .day-num.sat { color: #00e; }
     .cal-day .day-num.hol { color: #e00; }
-    .cal-day .day-label { font-size: 9px; color: #888; margin-top: 2px; }
     .cal-day .day-badge { font-size: 9px; background: #06C755; color: white; border-radius: 3px; padding: 1px 3px; margin-top: 2px; display: inline-block; }
     .cal-day .day-badge.override { background: #007AFF; }
     .cal-day .day-badge.noshift { background: #ccc; }
-
-    /* モーダル */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; }
-    .modal { background: white; border-radius: 15px 15px 0 0; position: fixed; bottom: 0; left: 0; right: 0; padding: 20px; max-height: 80vh; overflow-y: auto; z-index: 101; }
+    .modal { display: none; background: white; border-radius: 15px 15px 0 0; position: fixed; bottom: 0; left: 0; right: 0; padding: 20px; max-height: 80vh; overflow-y: auto; z-index: 101; }
     .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; }
-
-    /* プレビュー */
     .preview-container { margin-top: 20px; overflow-x: auto; }
     .preview-table { border-collapse: collapse; width: 100%; font-size: 12px; }
     .preview-table th { background: #333; color: white; padding: 6px 4px; text-align: center; border: 1px solid #555; font-size: 10px; min-width: 50px; }
@@ -184,7 +173,6 @@
   <button class="back-btn" onclick="showScreen('menuScreen')">← 戻る</button>
   <h3 style="margin-bottom:15px">📅 シフト枠設定</h3>
 
-  <!-- メインタブ -->
   <div class="main-tab-bar">
     <button class="main-tab-btn active" onclick="switchMainTab('template')">📋 テンプレート</button>
     <button class="main-tab-btn inactive" onclick="switchMainTab('calendar')">📅 カレンダー</button>
@@ -213,7 +201,7 @@
       <button class="cal-nav" onclick="changeMonth(1)">▶</button>
     </div>
     <div style="font-size:11px; color:#888; margin-bottom:10px;">
-      🟦 上書き済み　🟩 テンプレート適用　⬜ シフトなし
+      🟦 上書き済み　🟩 テンプレート適用　⬜ 休み
     </div>
     <div class="calendar-grid" id="calendarDayHeaders"></div>
     <div class="calendar-grid" id="calendarGrid" style="margin-top:3px;"></div>
@@ -228,7 +216,7 @@
   <p style="margin-top:20px; color:#888">近日実装予定</p>
 </div>
 
-<!-- 日付上書きモーダル -->
+<!-- モーダル -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 <div class="modal" id="dateModal">
   <div class="modal-title" id="modalTitle"></div>
@@ -247,26 +235,21 @@
   let storeId = null;
   let sections = [];
 
-  // テンプレート
   const DAY_TYPES = ['月', '火', '水', '木', '金', '土', '日', '祝日'];
-  const DAY_MAP = [null, '月', '火', '水', '木', '金', '土', '日']; // 0=日曜なので注意
-  // JSのgetDay(): 0=日,1=月,2=火,3=水,4=木,5=金,6=土
   const JS_DAY_MAP = ['日', '月', '火', '水', '木', '金', '土'];
 
   let currentDayType = '月';
   let shiftTemplateData = {};
   DAY_TYPES.forEach(d => shiftTemplateData[d] = {});
 
-  // カレンダー
   let calYear = new Date().getFullYear();
-  let calMonth = new Date().getMonth() + 2; // 来月
+  let calMonth = new Date().getMonth() + 2;
   if (calMonth > 12) { calMonth = 1; calYear++; }
-  let holidays = {}; // { 'yyyy-MM-dd': '祝日名' }
-  let overrides = {}; // { 'yyyy-MM-dd': [{ section, startTime, endTime, requiredNum }] }
+  let holidays = {};
+  let overrides = {};
   let modalDate = null;
   let modalEntries = [];
 
-  // ── ユーティリティ ──
   async function callGAS(params) {
     const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(params) });
     return await res.json();
@@ -304,11 +287,6 @@
     return html;
   }
 
-  function toYMD(date) {
-    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  }
-
-  // ── セクション管理 ──
   function addSection() {
     const input = document.getElementById('sectionInput');
     const val = input.value.trim();
@@ -330,7 +308,6 @@
     ).join('');
   }
 
-  // ── テンプレートタブ ──
   function renderDayTypeTabs() {
     const container = document.getElementById('dayTypeTabs');
     container.innerHTML = DAY_TYPES.map(d =>
@@ -443,7 +420,6 @@
     } finally { btn.disabled = false; }
   }
 
-  // ── プレビュー ──
   function showPreview() {
     const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
     const frames = shiftTemplateData[currentDayType];
@@ -499,7 +475,6 @@
     document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
   }
 
-  // ── カレンダータブ ──
   function switchMainTab(tab) {
     document.querySelectorAll('.main-tab-btn').forEach((b, i) => {
       b.className = 'main-tab-btn ' + (['template','calendar'][i] === tab ? 'active' : 'inactive');
@@ -518,13 +493,11 @@
   }
 
   async function loadCalendarData() {
-    // 祝日取得
     const hResult = await callGAS({ action: 'getHolidays', year: calYear, month: calMonth });
     holidays = {};
     if (hResult.success) {
       for (const h of hResult.holidays) holidays[h.date] = h.title;
     }
-    // 上書きデータ取得
     const yearMonth = `${calYear}-${String(calMonth).padStart(2,'0')}`;
     const oResult = await callGAS({ action: 'getShiftOverrides', storeId, yearMonth });
     overrides = {};
@@ -550,8 +523,6 @@
 
   function renderCalendar() {
     document.getElementById('calTitle').innerText = `${calYear}年${calMonth}月`;
-
-    // 曜日ヘッダー
     const headers = ['日','月','火','水','木','金','土'];
     const hContainer = document.getElementById('calendarDayHeaders');
     hContainer.innerHTML = headers.map((h, i) =>
@@ -561,7 +532,6 @@
     const firstDay = new Date(calYear, calMonth - 1, 1).getDay();
     const daysInMonth = new Date(calYear, calMonth, 0).getDate();
     const container = document.getElementById('calendarGrid');
-
     let html = '';
     for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
 
@@ -571,7 +541,7 @@
       const isHoliday = !!holidays[dateStr];
       const isOverridden = !!overrides[dateStr];
       const template = getTemplateForDate(dateStr);
-      const hasS = hasShift(isOverridden ? { _: overrides[dateStr] } : template);
+      const hasS = hasShift(template);
 
       const dayClass = `cal-day ${isHoliday ? 'holiday' : ''} ${isOverridden ? 'overridden' : ''}`;
       const numClass = `day-num ${dayOfWeek===0||isHoliday ? 'hol' : dayOfWeek===6 ? 'sat' : ''}`;
@@ -592,18 +562,14 @@
     container.innerHTML = html;
   }
 
-  // ── モーダル（日付上書き） ──
   function openModal(dateStr) {
     modalDate = dateStr;
     const d = new Date(dateStr + 'T00:00:00');
     const dayName = JS_DAY_MAP[d.getDay()];
     const isHoliday = !!holidays[dateStr];
     const holName = isHoliday ? `（${holidays[dateStr]}）` : '';
+    document.getElementById('modalTitle').innerText = `${dateStr}（${dayName}）${holName}`;
 
-    document.getElementById('modalTitle').innerText =
-      `${dateStr}（${dayName}）${holName}`;
-
-    // モーダルの枠データ: 上書きがあればそれ、なければテンプレート
     if (overrides[dateStr]) {
       modalEntries = JSON.parse(JSON.stringify(overrides[dateStr]));
     } else {
@@ -645,8 +611,6 @@
   }
 
   function renderModalFrame(section, idx, frame) {
-    const globalIdx = modalEntries.findIndex((e, i) => e.section === section &&
-      modalEntries.filter(f => f.section === section).indexOf(e) === idx);
     return `
       <div style="display:flex; align-items:center; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
         <select onchange="updateModalFrame('${section}', ${idx}, 'startTime', this.value)"
@@ -698,12 +662,7 @@
     const status = document.getElementById('modalStatus');
     btn.disabled = true;
     try {
-      const result = await callGAS({
-        action: 'saveShiftOverride',
-        storeId,
-        date: modalDate,
-        entries: modalEntries
-      });
+      const result = await callGAS({ action: 'saveShiftOverride', storeId, date: modalDate, entries: modalEntries });
       if (result.success) {
         overrides[modalDate] = [...modalEntries];
         status.className = 'status success';
@@ -722,12 +681,7 @@
   async function resetOverride() {
     const status = document.getElementById('modalStatus');
     try {
-      const result = await callGAS({
-        action: 'saveShiftOverride',
-        storeId,
-        date: modalDate,
-        entries: []
-      });
+      const result = await callGAS({ action: 'saveShiftOverride', storeId, date: modalDate, entries: [] });
       if (result.success) {
         delete overrides[modalDate];
         status.className = 'status success';
@@ -740,7 +694,6 @@
     }
   }
 
-  // ── 店舗情報保存 ──
   async function saveStore() {
     const btn = document.getElementById('storeSaveBtn');
     const status = document.getElementById('storeStatus');
@@ -782,7 +735,6 @@
     } finally { btn.disabled = false; }
   }
 
-  // ── 画面切替 ──
   async function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -793,7 +745,6 @@
     }
   }
 
-  // ── 初期化 ──
   window.onload = async function() {
     generateTimeOptions('openTime');
     generateTimeOptions('closeTime');
@@ -828,5 +779,3 @@
 </script>
 </body>
 </html>
-✅ 上書き済みの日は青枠で表示
-✅ テンプレートに戻すボタンあり
