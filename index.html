@@ -180,15 +180,18 @@
 
   <!-- テンプレートタブ -->
   <div id="templateTab">
-    <div class="tab-bar" id="dayTypeTabs"></div>
-    <div id="shiftSections"></div>
-    <button class="preview-btn" onclick="showPreview()">👁️ プレビューを確認</button>
-    <button class="save-btn" id="shiftSaveBtn" onclick="saveShiftTemplate()">テンプレートを保存</button>
-    <div class="status" id="shiftStatus"></div>
-    <div id="previewArea" style="display:none; margin-top:20px;">
-      <h4 style="margin-bottom:10px;">📊 シフト表プレビュー（<span id="previewDayType"></span>）</h4>
-      <div class="preview-container">
-        <table class="preview-table" id="previewTable"></table>
+    <div id="templateLoading" style="text-align:center; color:#888; padding:20px;">読み込み中...</div>
+    <div id="templateContent" style="display:none;">
+      <div class="tab-bar" id="dayTypeTabs"></div>
+      <div id="shiftSections"></div>
+      <button class="preview-btn" onclick="showPreview()">👁️ プレビューを確認</button>
+      <button class="save-btn" id="shiftSaveBtn" onclick="saveShiftTemplate()">テンプレートを保存</button>
+      <div class="status" id="shiftStatus"></div>
+      <div id="previewArea" style="display:none; margin-top:20px;">
+        <h4 style="margin-bottom:10px;">📊 シフト表プレビュー（<span id="previewDayType"></span>）</h4>
+        <div class="preview-container">
+          <table class="preview-table" id="previewTable"></table>
+        </div>
       </div>
     </div>
   </div>
@@ -779,3 +782,4 @@
 </script>
 </body>
 </html>
+
