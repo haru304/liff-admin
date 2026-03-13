@@ -743,15 +743,18 @@ async function showScreen(id) {
   document.getElementById(id).classList.add('active');
 
   if (id === 'shiftScreen') {
-    // ローディング表示・コンテンツ非表示
     document.getElementById('templateLoading').style.display = 'block';
     document.getElementById('templateContent').style.display = 'none';
 
-    await loadShiftTemplate();
+    try {
+      await loadShiftTemplate();
+    } catch(err) {
+      console.error(err);
+    }
+
     renderDayTypeTabs();
     renderShiftSections();
 
-    // 読み込み完了後に表示
     document.getElementById('templateLoading').style.display = 'none';
     document.getElementById('templateContent').style.display = 'block';
   }
@@ -791,5 +794,6 @@ async function showScreen(id) {
 </script>
 </body>
 </html>
+
 
 
