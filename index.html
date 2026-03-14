@@ -215,11 +215,47 @@
 <!-- スタッフ管理 -->
 <div id="staffScreen" class="screen">
   <button class="back-btn" onclick="showScreen('menuScreen')">← 戻る</button>
-  <h3>👥 スタッフ管理</h3>
-  <p style="margin-top:20px; color:#888">近日実装予定</p>
+  <h3 style="margin-bottom:15px">👥 スタッフ管理</h3>
+
+  <div id="staffLoading" style="text-align:center; color:#888; padding:20px;">読み込み中...</div>
+
+  <div id="staffContent" style="display:none;">
+
+    <!-- 新規スタッフ発行 -->
+    <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+      <div style="font-weight:bold; margin-bottom:10px;">➕ 新規スタッフ発行</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="text" id="newStaffName" placeholder="スタッフ名を入力"
+          style="flex:1; padding:10px; border:1px solid #ddd; border-radius:5px; font-size:14px;">
+        <select id="newStaffRole"
+          style="width:auto; padding:10px; border:1px solid #ddd; border-radius:5px; font-size:14px;">
+          <option value="staff">スタッフ</option>
+          <option value="admin">管理者</option>
+        </select>
+      </div>
+      <button onclick="issueStaffId()"
+        style="width:100%; margin-top:10px; padding:12px; background:#06C755; color:white; border:none; border-radius:8px; font-size:15px; font-weight:bold; cursor:pointer;">
+        🎫 IDを発行する
+      </button>
+      <div class="status" id="addStaffStatus"></div>
+      <!-- 発行結果 -->
+      <div id="issuedResult" style="display:none; margin-top:10px; background:#e8f5e9; border-radius:8px; padding:12px; text-align:center;">
+        <div style="font-size:12px; color:#555; margin-bottom:4px;">発行されたスタッフID</div>
+        <div id="issuedId" style="font-size:22px; font-weight:bold; color:#06C755; letter-spacing:2px;"></div>
+        <div style="font-size:12px; color:#888; margin-top:4px;">このIDをスタッフに伝えてください</div>
+      </div>
+    </div>
+
+    <!-- 検索 -->
+    <input type="text" id="staffSearch" placeholder="🔍 名前・スタッフIDで検索"
+      oninput="filterStaff()"
+      style="margin-bottom:15px; padding:10px; border:1px solid #ddd; border-radius:8px; width:100%; font-size:14px;">
+
+    <div id="staffList"></div>
+  </div>
 </div>
 
-<!-- モーダル -->
+<!-- モーダル（カレンダー日付上書き用） -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 <div class="modal" id="dateModal">
   <div class="modal-title" id="modalTitle"></div>
@@ -252,6 +288,10 @@
   let overrides = {};
   let modalDate = null;
   let modalEntries = [];
+
+  let staffList = [];
+
+  // ===== 共通 =====
 
   async function callGAS(params) {
     const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(params) });
@@ -290,6 +330,31 @@
     return html;
   }
 
+  async function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+
+    if (id === 'shiftScreen') {
+      document.getElementById('templateLoading').style.display = 'block';
+      document.getElementById('templateContent').style.display = 'none';
+      try { await loadShiftTemplate(); } catch(err) { console.error(err); }
+      renderDayTypeTabs();
+      renderShiftSections();
+      document.getElementById('templateLoading').style.display = 'none';
+      document.getElementById('templateContent').style.display = 'block';
+    }
+
+    if (id === 'staffScreen') {
+      document.getElementById('staffLoading').style.display = 'block';
+      document.getElementById('staffContent').style.display = 'none';
+      try { await loadStaffList(); } catch(err) { console.error(err); }
+      document.getElementById('staffLoading').style.display = 'none';
+      document.getElementById('staffContent').style.display = 'block';
+    }
+  }
+
+  // ===== 店舗情報 =====
+
   function addSection() {
     const input = document.getElementById('sectionInput');
     const val = input.value.trim();
@@ -310,6 +375,51 @@
       `<span class="tag">${s}<span class="tag-del" onclick="removeSection('${s}')">×</span></span>`
     ).join('');
   }
+
+  async function saveStore() {
+    const btn = document.getElementById('storeSaveBtn');
+    const status = document.getElementById('storeStatus');
+    btn.disabled = true;
+    try {
+      const result = await callGAS({
+        action: 'saveStore', storeId,
+        storeName: document.getElementById('storeName').value.trim(),
+        openTime: document.getElementById('openTime').value,
+        closeTime: document.getElementById('closeTime').value,
+        holiday: document.getElementById('holiday').value,
+        sections: sections.join(',')
+      });
+      status.className = result.success ? 'status success' : 'status error';
+      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
+    } catch (err) {
+      status.className = 'status error';
+      status.innerText = '❌ エラー: ' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  // ===== シフト設定 =====
+
+  async function saveSettings() {
+    const btn = document.getElementById('settingsSaveBtn');
+    const status = document.getElementById('settingsStatus');
+    btn.disabled = true;
+    try {
+      const result = await callGAS({
+        action: 'saveSettings', storeId,
+        cycle: document.getElementById('cycle').value,
+        deadline: document.getElementById('deadline').value,
+        submitDeadline: document.getElementById('submitDeadline').value,
+        notifyTiming: document.getElementById('notifyTiming').value
+      });
+      status.className = result.success ? 'status success' : 'status error';
+      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
+    } catch (err) {
+      status.className = 'status error';
+      status.innerText = '❌ エラー: ' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  // ===== シフト枠テンプレート =====
 
   function renderDayTypeTabs() {
     const container = document.getElementById('dayTypeTabs');
@@ -424,73 +534,69 @@
   }
 
   function showPreview() {
-  const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
-  const frames = shiftTemplateData[currentDayType];
-  const allTimes = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m of [0, 30]) allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-  }
-
-  let minTime = '23:30', maxTime = '00:00';
-  for (const section of sectionList) {
-    for (const f of (frames[section] || [])) {
-      if (f.startTime < minTime) minTime = f.startTime;
-      if (f.endTime > maxTime) maxTime = f.endTime;
+    const sectionList = sections.length > 0 ? sections : ['（セクションなし）'];
+    const frames = shiftTemplateData[currentDayType];
+    const allTimes = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
     }
-  }
-  if (minTime === '23:30' && maxTime === '00:00') { alert('枠が設定されていません'); return; }
 
-  const slots = allTimes.filter(t => t >= minTime && t < maxTime);
-
-  // 時間ヘッダーは1時間ごとに表示（30分刻みは薄く）
-  let html = '<tr><th style="min-width:60px; position:sticky; left:0; z-index:2; background:#333; font-size:10px;">セクション</th>';
-  for (const t of slots) {
-    const isHour = t.endsWith(':00');
-    html += `<th style="
-      min-width:${isHour ? '38px' : '30px'};
-      font-size:${isHour ? '10px' : '8px'};
-      color:${isHour ? 'white' : '#aaa'};
-      padding:4px 1px;
-    ">${isHour ? t : t.slice(3)}</th>`;
-  }
-  html += '</tr>';
-
-  for (const section of sectionList) {
-    html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1; font-size:11px; padding:4px 6px;">${section}</td>`;
-    let skipCount = 0;
-    for (let si = 0; si < slots.length; si++) {
-      if (skipCount > 0) { skipCount--; continue; }
-      const slot = slots[si];
-      const slotEnd = allTimes[allTimes.indexOf(slot) + 1];
-      const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
-      if (matching && matching.startTime === slot) {
-        const startIdx = slots.indexOf(matching.startTime);
-        let endIdx = slots.indexOf(matching.endTime);
-        if (endIdx < 0) endIdx = slots.length;
-        const span = endIdx - startIdx;
-        skipCount = span - 1;
-        const num = parseInt(matching.requiredNum);
-        const colors = ['#06C755','#05a847','#048a3b','#037a34','#026a2d'];
-        const bars = Array(num).fill(0).map((_, i) =>
-          `<div style="background:${colors[i % colors.length]}; height:10px; border-radius:2px; margin:1px 0; width:100%;"></div>`
-        ).join('');
-        html += `<td colspan="${span}" style="padding:3px 4px; border:1px solid #ddd; vertical-align:middle; background:#f0fff4;">
-          <div style="font-size:9px; color:#333; text-align:center; margin-bottom:1px; font-weight:bold;">${matching.startTime}〜${matching.endTime}</div>
-          ${bars}
-          <div style="font-size:9px; color:#06C755; text-align:center; margin-top:1px; font-weight:bold;">${num}人</div>
-        </td>`;
-      } else if (!matching) {
-        html += `<td class="empty-cell"></td>`;
+    let minTime = '23:30', maxTime = '00:00';
+    for (const section of sectionList) {
+      for (const f of (frames[section] || [])) {
+        if (f.startTime < minTime) minTime = f.startTime;
+        if (f.endTime > maxTime) maxTime = f.endTime;
       }
     }
+    if (minTime === '23:30' && maxTime === '00:00') { alert('枠が設定されていません'); return; }
+
+    const slots = allTimes.filter(t => t >= minTime && t < maxTime);
+
+    let html = '<tr><th style="min-width:60px; position:sticky; left:0; z-index:2; background:#333; font-size:10px;">セクション</th>';
+    for (const t of slots) {
+      const isHour = t.endsWith(':00');
+      html += `<th style="min-width:${isHour ? '38px' : '30px'}; font-size:${isHour ? '10px' : '8px'}; color:${isHour ? 'white' : '#aaa'}; padding:4px 1px;">${isHour ? t : t.slice(3)}</th>`;
+    }
     html += '</tr>';
+
+    for (const section of sectionList) {
+      html += `<tr><td class="section-cell" style="position:sticky; left:0; z-index:1; font-size:11px; padding:4px 6px;">${section}</td>`;
+      let skipCount = 0;
+      for (let si = 0; si < slots.length; si++) {
+        if (skipCount > 0) { skipCount--; continue; }
+        const slot = slots[si];
+        const slotEnd = allTimes[allTimes.indexOf(slot) + 1];
+        const matching = (frames[section] || []).find(f => f.startTime <= slot && f.endTime >= slotEnd);
+        if (matching && matching.startTime === slot) {
+          const startIdx = slots.indexOf(matching.startTime);
+          let endIdx = slots.indexOf(matching.endTime);
+          if (endIdx < 0) endIdx = slots.length;
+          const span = endIdx - startIdx;
+          skipCount = span - 1;
+          const num = parseInt(matching.requiredNum);
+          const colors = ['#06C755','#05a847','#048a3b','#037a34','#026a2d'];
+          const bars = Array(num).fill(0).map((_, i) =>
+            `<div style="background:${colors[i % colors.length]}; height:10px; border-radius:2px; margin:1px 0; width:100%;"></div>`
+          ).join('');
+          html += `<td colspan="${span}" style="padding:3px 4px; border:1px solid #ddd; vertical-align:middle; background:#f0fff4;">
+            <div style="font-size:9px; color:#333; text-align:center; margin-bottom:1px; font-weight:bold;">${matching.startTime}〜${matching.endTime}</div>
+            ${bars}
+            <div style="font-size:9px; color:#06C755; text-align:center; margin-top:1px; font-weight:bold;">${num}人</div>
+          </td>`;
+        } else if (!matching) {
+          html += `<td class="empty-cell"></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+
+    document.getElementById('previewTable').innerHTML = html;
+    document.getElementById('previewDayType').innerText = currentDayType;
+    document.getElementById('previewArea').style.display = 'block';
+    document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
   }
 
-  document.getElementById('previewTable').innerHTML = html;
-  document.getElementById('previewDayType').innerText = currentDayType;
-  document.getElementById('previewArea').style.display = 'block';
-  document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
-}
+  // ===== カレンダー =====
 
   function switchMainTab(tab) {
     document.querySelectorAll('.main-tab-btn').forEach((b, i) => {
@@ -711,68 +817,135 @@
     }
   }
 
-  async function saveStore() {
-    const btn = document.getElementById('storeSaveBtn');
-    const status = document.getElementById('storeStatus');
-    btn.disabled = true;
-    try {
-      const result = await callGAS({
-        action: 'saveStore', storeId,
-        storeName: document.getElementById('storeName').value.trim(),
-        openTime: document.getElementById('openTime').value,
-        closeTime: document.getElementById('closeTime').value,
-        holiday: document.getElementById('holiday').value,
-        sections: sections.join(',')
-      });
-      status.className = result.success ? 'status success' : 'status error';
-      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
-    } catch (err) {
-      status.className = 'status error';
-      status.innerText = '❌ エラー: ' + err.message;
-    } finally { btn.disabled = false; }
+  // ===== スタッフ管理 =====
+
+  async function loadStaffList() {
+    const result = await callGAS({ action: 'getStaffList', storeId });
+    if (result.success) {
+      staffList = result.data;
+      renderStaffList(staffList);
+    }
   }
 
-  async function saveSettings() {
-    const btn = document.getElementById('settingsSaveBtn');
-    const status = document.getElementById('settingsStatus');
-    btn.disabled = true;
-    try {
-      const result = await callGAS({
-        action: 'saveSettings', storeId,
-        cycle: document.getElementById('cycle').value,
-        deadline: document.getElementById('deadline').value,
-        submitDeadline: document.getElementById('submitDeadline').value,
-        notifyTiming: document.getElementById('notifyTiming').value
-      });
-      status.className = result.success ? 'status success' : 'status error';
-      status.innerText = result.success ? '✅ 保存しました！' : '❌ ' + result.msg;
-    } catch (err) {
-      status.className = 'status error';
-      status.innerText = '❌ エラー: ' + err.message;
-    } finally { btn.disabled = false; }
+  function filterStaff() {
+    const q = document.getElementById('staffSearch').value.trim().toLowerCase();
+    const filtered = staffList.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.staffId.toLowerCase().includes(q)
+    );
+    renderStaffList(filtered);
   }
 
-async function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  function renderStaffList(list) {
+    const container = document.getElementById('staffList');
+    if (list.length === 0) {
+      container.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">スタッフが登録されていません</p>';
+      return;
+    }
+    container.innerHTML = list.map(s => `
+      <div style="background:white; border-radius:10px; padding:15px; margin-bottom:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-weight:bold; font-size:15px;">${s.name}</div>
+            <div style="font-size:12px; color:#888; margin-top:2px;">${s.staffId}</div>
+            <div style="font-size:11px; margin-top:3px;">
+              ${s.lineId
+                ? '<span style="color:#06C755;">✅ LINE登録済み</span>'
+                : '<span style="color:#aaa;">⬜ 未登録</span>'}
+            </div>
+          </div>
+          <select onchange="changeRole('${s.staffId}', this.value)"
+            style="width:auto; padding:6px 10px; border:1px solid #ddd; border-radius:5px; font-size:13px;
+            background:${s.role === 'admin' ? '#fff3e0' : '#f0fff4'};">
+            <option value="staff" ${s.role === 'staff' ? 'selected' : ''}>スタッフ</option>
+            <option value="admin" ${s.role === 'admin' ? 'selected' : ''}>管理者</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button onclick="resetLine('${s.staffId}', '${s.name}')"
+            style="flex:1; padding:8px; background:#fff3e0; border:1px solid #ffb74d; border-radius:5px; color:#e65100; font-size:12px; cursor:pointer;">
+            🔄 LINE再登録
+          </button>
+          <button onclick="removeStaff('${s.staffId}', '${s.name}')"
+            style="flex:1; padding:8px; background:#fff0f0; border:1px solid #ef9a9a; border-radius:5px; color:#c62828; font-size:12px; cursor:pointer;">
+            🗑️ 削除
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
 
-  if (id === 'shiftScreen') {
-    document.getElementById('templateLoading').style.display = 'block';
-    document.getElementById('templateContent').style.display = 'none';
+  async function issueStaffId() {
+    const name = document.getElementById('newStaffName').value.trim();
+    const role = document.getElementById('newStaffRole').value;
+    const status = document.getElementById('addStaffStatus');
 
-    try {
-      await loadShiftTemplate();
-    } catch(err) {
-      console.error(err);
+    if (!name) {
+      status.className = 'status error';
+      status.innerText = '❌ スタッフ名を入力してください';
+      return;
     }
 
-    renderDayTypeTabs();
-    renderShiftSections();
-
-    document.getElementById('templateLoading').style.display = 'none';
-    document.getElementById('templateContent').style.display = 'block';
+    try {
+      const result = await callGAS({ action: 'addStaff', storeId, name, role });
+      if (result.success) {
+        document.getElementById('issuedId').innerText = result.staffId;
+        document.getElementById('issuedResult').style.display = 'block';
+        status.className = 'status success';
+        status.innerText = `✅ ${name} さんを登録しました`;
+        staffList.push({ storeId, staffId: result.staffId, role, lineId: '', name });
+        renderStaffList(staffList);
+        document.getElementById('newStaffName').value = '';
+      } else {
+        status.className = 'status error';
+        status.innerText = '❌ ' + result.msg;
+      }
+    } catch (err) {
+      status.className = 'status error';
+      status.innerText = '❌ エラー: ' + err.message;
+    }
   }
-}
+
+  async function changeRole(staffId, role) {
+    try {
+      const result = await callGAS({ action: 'updateStaffRole', storeId, staffId, role });
+      if (!result.success) alert('❌ ' + result.msg);
+      else {
+        const s = staffList.find(s => s.staffId === staffId);
+        if (s) s.role = role;
+      }
+    } catch (err) { alert('❌ エラー: ' + err.message); }
+  }
+
+  async function resetLine(staffId, name) {
+    if (!confirm(`${name} のLINE IDをリセットしますか？\n再度登録が必要になります。`)) return;
+    try {
+      const result = await callGAS({ action: 'resetLineId', storeId, staffId });
+      if (result.success) {
+        const s = staffList.find(s => s.staffId === staffId);
+        if (s) s.lineId = '';
+        renderStaffList(staffList);
+        alert('✅ リセットしました');
+      } else {
+        alert('❌ ' + result.msg);
+      }
+    } catch (err) { alert('❌ エラー: ' + err.message); }
+  }
+
+  async function removeStaff(staffId, name) {
+    if (!confirm(`${name} を削除しますか？\nこの操作は取り消せません。`)) return;
+    try {
+      const result = await callGAS({ action: 'deleteStaff', storeId, staffId });
+      if (result.success) {
+        staffList = staffList.filter(s => s.staffId !== staffId);
+        renderStaffList(staffList);
+      } else {
+        alert('❌ ' + result.msg);
+      }
+    } catch (err) { alert('❌ エラー: ' + err.message); }
+  }
+
+  // ===== 初期化 =====
 
   window.onload = async function() {
     generateTimeOptions('openTime');
@@ -808,7 +981,3 @@ async function showScreen(id) {
 </script>
 </body>
 </html>
-
-
-
-
