@@ -278,6 +278,11 @@
     <div style="font-size:11px; color:#888; margin-bottom:12px;">
       セクション行をタップ → ステータス変更・応募者確認
     </div>
+    <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; box-shadow:0 2px 5px rgba(0,0,0,0.08);">
+      <div style="font-size:13px; color:#555; margin-bottom:10px;">修正完了後にスタッフへシフトを通知します</div>
+      <button onclick="sendConfirmations()" style="width:100%; padding:14px; background:#9C27B0; color:white; border:none; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">📨 シフト確定通知を送る</button>
+      <div class="status" id="confirmStatus"></div>
+    </div>
     <div id="recruitList"></div>
   </div>
 </div>
@@ -1158,8 +1163,25 @@
     document.getElementById('applicantModal').style.display = 'none';
     currentShift = null;
   }
-
-  // ===== 初期化 =====
+  
+async function sendConfirmations() {
+    if (!confirm(`${recruitYear}年${recruitMonth}月のシフト確定通知を全スタッフに送信しますか？`)) return;
+    const status = document.getElementById('confirmStatus');
+    const yearMonth = `${recruitYear}-${String(recruitMonth).padStart(2,'0')}`;
+    try {
+      const result = await callGAS({ action: 'sendShiftConfirmations', storeId, yearMonth });
+      if (result.success) {
+        status.className = 'status success';
+        status.innerText = '✅ 通知を送信しました！';
+      } else {
+        status.className = 'status error';
+        status.innerText = '❌ ' + result.msg;
+      }
+    } catch (err) {
+      status.className = 'status error';
+      status.innerText = '❌ エラー: ' + err.message;
+    }
+  }
 
   window.onload = async function() {
     generateTimeOptions('openTime');
